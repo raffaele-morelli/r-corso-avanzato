@@ -1,0 +1,264 @@
+Corso avanzato
+========================================================
+author: Dott.ssa Arianna Orasi - Dott.Raffaele Morelli - Dott. Marco Picone
+width: 1300
+height: 800
+font-family: 'Serif'
+
+
+Importiamo i dati
+========================================================
+
+```{r}
+# leggo il file di dati in formato csv esportato da LimeSurvey
+data <- read.csv("./survey/survey_256638_R_data_file.csv", quote = "'\"", sep = ";", 
+                 na.strings =c("", "\"\""), 
+                 stringsAsFactors = FALSE, 
+                 fileEncoding = "UTF-8")
+
+source('./survey/survey_256638_R_syntax_file.R')
+
+dim(data)
+class(data)
+```
+
+Variabili del dataframe
+========================================================
+
+```{r}
+variabili <- names(data)
+# cat(variabili)
+head( variabili , n = 40 )
+```
+
+La libreria dplyr
+========================================================
+
+`dplyr` può essere definita come una vera e propria grammatica per la manipolazione dei dati visto che mette a disposizione un insieme di *verbi* che consentono di risolvere i più comuni problemi che si presentano quando dobbiamo manipolare i dati:
+
+* `mutate()` aggiunge nuove variabili che sono funzioni di variabili esistenti
+* `select()` seleziona le variabili osservate in base al loro nome
+* `filter()` seleziona le osservazioni/casi in base ai loro valori
+* `summarise()` riduce più valori ad un singolo riepilogo
+* `arrange()` cambia l'ordine delle righe
+
+```{r}
+library(dplyr) # carichiamo la libreria
+```
+
+Selezione
+========================================================
+
+```{r}
+df <- select(data, D1, D4, Tempo.totale) # 
+head(df, n = 15)
+```
+
+Nuove variabili
+========================================================
+
+```{r}
+df <- mutate(df, minuti = round(Tempo.totale/60, 1) )
+head(df, n = 5)
+
+```
+
+Filtri
+========================================================
+
+```{r}
+df <- filter(data, D1 == "Studente", D2 == "Femmina") # tutti gli studenti di sesso femminile
+head(df[, c(1:6)], n = 5)
+```
+
+Sommari
+========================================================
+
+```{r}
+summarise(data, v = n())
+summarise(data, v = mean(Tempo.totale))
+# summarise(data, v = any(Tempo.totale > 0))
+# summarise(data, v = all(Tempo.totale > 0))
+# summarise(data, v = quantile(Tempo.totale))
+
+```
+
+L'operatore %>%
+========================================================
+
+Questa combinazione di caratteri `%>%` si chiama *pipe operator* e consente di *dirigere* l'output di una funzione verso l'input di un'altra (analogo all'operatore **|** in ambienti linux/unix).
+
+Prendiamo 10 righe ed alcune colonne per non appesantire la pagina di output
+
+```{r}
+data[1:10, ] %>%                        # prime dieci righe
+  select(D1, D2, D4, Tempo.totale) %>%  # selezione
+  arrange(Tempo.totale) %>%             # ordinamento
+  head(n = 3)                           # prime 3 righe
+```
+
+Filtro, selezione e nuova variabile
+========================================================
+
+Per le prime 10 righe del *dataframe* generiamo la variabile tempo totale espresso in minuti.
+
+```{r}
+data %>% 
+  filter(id %in% head(data$id, n = 10) ) %>%  # !?!?!?
+  select(id, D1, D2, Tempo.totale) %>%  
+  mutate(Tempo.Minuti = round(Tempo.totale / 60, 2))
+```
+
+Raggruppamento
+========================================================
+
+```{r}
+data %>% group_by(D2) %>% summarise(N = n())
+```
+***
+```{r}
+data %>% group_by(D2, D4) %>% summarise(N = n())
+```
+
+Tibbles
+========================================================
+
+Si tratta di dataframe ma si comportano in modo leggermente diverso per facilitarci la vita. R è un vecchio linguaggio e molte cose utili 20 anni fa non lo sono più quindi anziché modificare R alle sue basi si sviluppano nuovi pacchetti che introducono innovazioni (ad ese. `plot` -> `ggplot`).
+
+Un `tibble`, o `tbl_df`, è una versione moderna di `data.frame`, mantiene le parti efficaci tralasciando ciò che non lo è. Un tibble non cambia nomi o tipi di variabili e non fa corrispondenze parziali) e si *lamenta* di più (ad esempio quando una variabile non esiste). 
+Tutto ciò costringe a risolvere i problemi *a priori* e conduce (in genere) alla scrittura di codice più pulito e facile da interpretare. Sono più facili da usare con grandi set di dati contenenti oggetti complessi.
+
+
+Raggruppamento nuova variabile
+========================================================
+
+La funzione `n()` calcola il numero di osservazioni in ogni raggruppamento creato da `group_by`.
+
+Mettendo tutto insieme: calcoliamo una nuova variabile che contenga i valori percentuali con cui si distribuisce la variabile D2
+
+```{r}
+data %>% 
+  group_by(D2) %>% # raggruppamamento
+  summarise(Tot = n()) %>%  # contiamo i valori raggruppati
+  mutate(Perc = round(Tot / sum(Tot), 4)*100 ) # nuova variabile
+```
+
+La libreria reshape
+========================================================
+
+Altra funzione molto utilizzata per la riorganizzazione dei dati è `melt`, contenuta nella libreria `reshape`, con cui (in breve) si *disfano* i dati in modo che ogni riga rappresenti una combinazione unica **id-variable** (`?melt`).
+
+```{r}
+library(reshape)
+```
+
+Prendiamo poche righe e le prime tre colonne per rendere l'esempio più chiaro ed immediato.
+
+```{r}
+es <- data[1:4, 1:3]
+es
+```
+
+Esempio
+========================================================
+
+`id` è una colonna nel nostro dataframe
+```{r}
+melt(es, id = c("id")) 
+
+```
+
+
+========================================================
+
+Possiamo creare combinazioni univoche anche per coppie di variabili.
+
+```{r}
+es <- data[10:20, c("id", "D2", "D4")]
+
+molt <- melt(es, id = c("id", "D2"))
+molt
+```
+
+========================================================
+
+un esempio con dato mancante.
+
+```{r}
+es <- data[15:20, c("D2", "D5")]
+molt <- melt(es, id = c("D2"))
+molt
+```
+
+========================================================
+
+I dati contraddistinti dal valore `<NA>` sono i cosidetti dati mancanti, (Not Available). Con la funzione `is.na` possiamo individuare i dati mancanti, essa restiuisce `TRUE` o `FALSE` a seconda dei casi.
+
+```{r}
+!is.na(molt$value)
+```
+
+Righe senza dati mancanti
+=======================================================
+```{r}
+molt[ !is.na(molt$value), ]
+```
+
+Sottoinsieme con i soli studenti
+========================================================
+
+Adesso filtriamo il *dataframe* e prendiamo soltanto i dati relativi agli studenti.
+
+```{r, results="hide"}
+data <- data[ data$D1 == "Studente", ]
+
+#oppure con filter del pacchetto dplyr
+data <- filter(data, D1=="Studente")
+```
+
+Facciamo un *melt* per i nostri dati, in particolare per le risposte alla domanda *Composizione della famiglia*.
+
+```{r}
+meltdf <- melt(data[, c(1,8:11)], id = c("id") )
+head(meltdf) # guardiamo
+```
+
+Struttura del melted dataframe
+========================================================
+```{r}
+str(meltdf) # vediamo come è strutturato
+```
+
+========================================================
+
+contiamo le risposte per ogni coppia (unica) id-variabile utilizzando `summarise` ed assegnamo il risultato del conteggio alla variabile `Tot`.
+
+```{r}
+meltdf %>% 
+  group_by(variable, value) %>% 
+  summarise(Tot = n())
+```
+
+========================================================
+
+calcoliamo le percentuali creando una nuova variabile con `mutate`.
+
+```{r}
+meltdf %>% 
+  group_by(variable,value) %>% 
+  summarise(Tot = n()) %>% 
+  mutate(Perc = round(Tot / sum(Tot), 4)*100 )
+```
+
+========================================================
+
+se volessimo creare un nuovo dataframe con questi dati è sufficente assegnare il risultato della sequenza di operazioni ad una variabile.
+
+```{r}
+nuovo_dataframe <- meltdf %>% 
+  group_by(variable,value) %>% 
+  summarise(Tot = n()) %>% 
+  mutate(Perc = round(Tot / sum(Tot), 4)*100 )
+
+nuovo_dataframe
+```

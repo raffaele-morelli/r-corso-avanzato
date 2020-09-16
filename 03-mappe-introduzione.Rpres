@@ -1,0 +1,215 @@
+Introduzione al trattamento dei dati geografici, sistemi di riferimento, tematismi ed etichette
+========================================================
+author: Dott.ssa Arianna Orasi - Dott.Raffaele Morelli - Dott. Marco Picone 
+width: 1200
+height: 800
+font-family: 'Serif'
+
+========================================================
+In queste lezioni utilizzeremo le librerie `ggplot2` ed `sf` per realizzare mappe e sfruttare i parametri per la loro personalizzazione.
+
+Le mappe sono utilizzate per visualizzare dati in modo semplice, contrariamente a quanto accade se ci limitiamo a guardare i dati soltanto attraverso un foglio di calcolo. Per questo è importante che le mappe siano efficaci ed intuitive in modo che possano essere comprese anche da non addetti ai lavori.
+
+========================================================
+I principali elementi di una mappa sono rappresentati da:
+- poligoni
+- punti
+- linee
+- testo
+
+I poligoni sono forme geometriche chiuse (ad esempio i confini di uno stato o regione). 
+Le linee sono considerate forme lineari che non sono riempite con nessuna trama/texture (autostrade, torrenti o strade). 
+I punti vengono utilizzati per specificare posizioni specifiche come città o punti di riferimento. 
+
+È necessario pensare a quali elementi sono necessari nella mappa per avere davvero un impatto e trasmettere le informazioni al pubblico nel modo migliore. Layout e formattazione sono il secondo aspetto critico per migliorare visivamente la presentazione dei dati. 
+
+La disposizione di questi elementi della mappa e il modo in cui verranno disegnati possono essere personalizzati per ottenere il massimo impatto.
+
+========================================================
+
+R è un linguaggio orientato alla statistica ma nel corso degli anni sono state implementate delle librerie molto potenti per il trattamento dei dati spaziali che lo rendono lo strumento principale per la produzione di mappe in modo programmatico (in senso stretto).
+
+È relativamente semplice aggiungere o rimuovere elementi da una mappa (ad esempio commentando una riga di uno script) ed altrettanto semplice riprodurre la stessa mappa, lo stesso *layout*, per *data set* differenti.
+
+In sostanza, volendo confrontare R rispetto ai software GIS possiamo dire che l'approccio che implementano questi ultimi è del tipo WYSIWIG ("What You See Is What You Get"), mentre per R si tratta di WYSIWYM ("What You See Is What You Mean")
+
+ggplot2
+========================================================
+
+Con *ggplot2* la grammatica di un grafico è divisa in diversi componenti: geometrie e livelli.
+
+In pratica consente (obbliga, *ndr*) l'utente a focalizzare l'attenzione sugli elementi di un grafico ad un livello di astrazione più elevato, sopratutto in relazione a come devono essere strutturati i dati per raggiungere un determinato risultato. 
+
+Nonostante *ggplot2* stia diventando lo standard per la realizzazione di grafici in R non è orientato, almeno in modo specifico, ai dati spaziali. Attualmente questi ultimi sono ad appannaggio del pacchetto *sp* ma un nuovo pacchetto, *sf*, sta inesorabilmente prendendo il sopravvento e ggplot include in modo naturale livelli trattati con questa libreria. Il risultato è che possono essere create mappe ad alto contenuto informativo e visivamente attraenti come quelle realizzate con un GIS.
+
+Prerequisiti
+========================================================
+
+Iniziamo installando i pacchetti di cui avremo bisogno
+
+```{r, eval=FALSE}
+install.packages(c("cowplot", "googleway", "ggplot2", "ggrepel", "ggspatial", "libwgeom", "sf", "rnaturalearth", "rnaturalearthdata", "lwgeom", "ggpubr"))
+
+```
+
+```{r}
+# carichiamo le librerie
+library("ggplot2")
+library("sf")
+library("rnaturalearth")
+library("rnaturalearthdata")
+library("ggpubr")
+
+world <- ne_countries(scale = "medium", returnclass = "sf") # chiediamo un oggetto *
+class(world)
+```
+
+Grafico elementare
+========================================================
+
+```{r, fig.width=16, fig.align='center'}
+ggplot(data = world) + geom_sf()
+```
+
+Da notare come i livelli (*layers*) vengano aggiunti uno alla volta, in modo sequenziale, quindi l'ordine dei livelli è molto importante.
+Tutti i dati devono essere in formato *sf* per essere utilizzati da *ggplot2*, dati in altri formati (in *sp* ad esempio) dovranno essere convertiti manualmente.
+
+Aggiunta di livelli
+========================================================
+
+```{r, fig.width=18, fig.align='center'}
+ggplot(data = world) + geom_sf() +
+    xlab("Longitude") + ylab("Latitude") +
+    ggtitle("World map", subtitle = "Countries")
+```
+
+Qualche modifica
+========================================================
+
+```{r, fig.width=16, fig.align='center'}
+ggplot(data = world) + geom_sf(color = "black", fill = "dodgerblue")
+```
+
+Tematismo
+========================================================
+
+```{r, fig.width=18, fig.align='center'}
+ggplot(data = world) +
+    geom_sf(aes(fill = pop_est)) + 
+    scale_fill_viridis_c(option = "plasma", trans = "sqrt") + theme_bw()
+```
+
+Proiezione ed extent
+========================================================
+La funzione `coord_sf` ci permette di manipolare sia il sistema di proiezione che l'estensione della mappa.
+Per default verrà utilizzato il sistema di coordinate del primo livello, in assenza verrà utilizzato WGS84 (Lat/Lon, il sistema usato nei GPS). 
+
+```{r, fig.width=18, fig.align='center'}
+ggplot(data = world) + geom_sf() +
+    coord_sf(crs = "+proj=laea +lat_0=52 +lon_0=10 +x_0=4321000 +y_0=3210000 +ellps=GRS80 +units=m +no_defs ")
+```
+
+Codice EPSG
+========================================================
+
+```{r, fig.width=18, fig.align='center'}
+g1 <- ggplot(data = world) + geom_sf() + coord_sf(crs = "+init=epsg:3035")
+g2 <- ggplot(data = world) + geom_sf() + coord_sf(crs = st_crs(3035))
+
+ggarrange(g1, g2, labels = c("Lambert Azimuthal EPSG:3035", "EPSG:3035"), ncol = 2, nrow = 1)
+```
+
+
+========================================================
+L'estensione della mappa può essere impostata in `coord_sf`, di fatto ci consente di *zoomare* in un'area di interesse individuata dai limiti sull'asse X ed Y. I limiti vengono incrementati di una piccola frazione per assicurare che i dati e gli assi non si sovrappongano, per disabilitare questo comportamento di default basta usare `expand = FALSE`
+
+```{r, fig.width=18, fig.align='center'}
+ggplot(data = world) + geom_sf() + coord_sf(xlim = c(-102.15, -74.12), ylim = c(7.65, 33.97), expand = FALSE)
+```
+
+Simboli cartografici
+========================================================
+```{r, fig.width=18, fig.align='center'}
+library("ggspatial")
+ggplot(data = world) + geom_sf() +
+    annotation_scale(location = "bl", width_hint = 0.5) +
+    annotation_north_arrow(location = "bl", which_north = "true", pad_x = unit(0.75, "in"), 
+                           pad_y = unit(0.5, "in"), 
+                           style = north_arrow_fancy_orienteering) +
+    coord_sf(xlim = c(-102.15, -74.12), ylim = c(7.65, 33.97))
+```
+
+Annotazioni 
+========================================================
+
+```{r, fig.width=18, fig.align='center'}
+library("sf")
+world_points <- st_centroid(world)
+world_points <- cbind(world, st_coordinates(st_centroid(world$geometry)))
+head(world_points, n = 2)
+
+```
+
+==========================================================
+
+```{r, fig.width=18, fig.align='center'}
+ggplot(data = world) +
+  geom_sf() +
+  geom_text(data = world_points, aes(x = X, y = Y, label = name), color = "dodgerblue4", fontface = "bold", check_overlap = FALSE) +
+  annotate(geom = "text", x = -90, y = 26, label = "Gulf of Mexico", fontface = "italic", color = "grey22", size = 6) +
+  coord_sf(xlim = c(-102.15, -74.12), ylim = c(7.65, 33.97), expand = FALSE)
+```
+
+
+Mappa finale
+========================================================
+
+```{r, fig.width=18, fig.align='center'}
+g <- ggplot(data = world) + geom_sf(fill= "antiquewhite") + 
+  geom_text(data= world_points,aes(x=X, y=Y, label=name), color = "dodgerblue4", fontface = "bold", check_overlap = FALSE) + 
+  annotate(geom = "text", x = -90, y = 26, label = "Gulf of Mexico", fontface = "italic", color = "grey22", size = 6) +
+  theme_bw()
+g
+```
+
+Aggiungiamo elementi e zoomiamo
+========================================================
+```{r, fig.width=18, fig.align='center'}
+g <- g +
+  annotation_scale(location = "bl", width_hint = 0.5) + 
+  annotation_north_arrow(location = "bl", which_north = "true", pad_x = unit(0.75, "in"), pad_y = unit(0.5, "in"), 
+                         style = north_arrow_fancy_orienteering) + 
+  coord_sf(xlim = c(-102.15, -74.12), ylim = c(7.65, 33.97), expand = FALSE) 
+g
+```
+
+Etichette assi e titolo
+========================================================
+```{r, fig.width=18, fig.align='center'}
+g <- g + xlab("Longitude") + ylab("Latitude") + 
+  ggtitle("Map of the Gulf of Mexico and the Caribbean Sea") + 
+  theme(panel.grid.major = element_line(color = gray(.5), linetype = "dashed", size = 0.5), panel.background = element_rect(fill = "aliceblue"))
+g
+```
+
+Italia!
+========================================================
+```{r, fig.align='center'}
+ggplot(data = world) + geom_sf(fill= "antiquewhite") + 
+  geom_text(data = world_points, aes(x = X, y = Y, label = name), color = "dodgerblue4", fontface = "bold", check_overlap = TRUE) + 
+  annotate(geom = "text", x = -90, y = 26, label = "Gulf of Mexico", fontface = "italic", color = "grey22", size = 8) +
+  theme_bw() +
+  xlab("Longitude") + ylab("Latitude") + 
+  ggtitle("Mappa dell'Italia e del mar Mediterraneo") + 
+  theme(panel.grid.major = element_line(color = gray(.5), linetype = "dashed", size = 0.5), panel.background = element_rect(fill = "aliceblue")) +
+  coord_sf(xlim = c(0, 25), ylim = c(30, 50), expand = TRUE) 
+```
+
+Salvare la mappa
+=========================================================
+
+```{r}
+ggsave("italy-map.pdf")
+ggsave("italy-map_web.png", width = 6, height = 6, dpi = "screen")
+```
+

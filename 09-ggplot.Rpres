@@ -1,0 +1,236 @@
+Ggplot
+========================================================
+author: Dott.ssa Arianna Orasi - Dott.Raffaele Morelli - Dott. Marco Picone
+width: 1600
+height: 800
+font-family: 'Serif'
+
+
+Introduzione
+========================================================
+
+La principale differenza tra `ggplot` e la grafica di base (`plot`) è che a differenza di quest'ultima `ggplot` lavora con i dataframe anziché con dati vettoriali. Tutti i dati necessari per costruire un grafico di solito sono contenuti nel dataframe fornito a `ggplot` oppure possono essere utilizzati nelle varie geometrie che possiamo utilizzare.
+
+Un'altra caratteristica è che il grafico viene costruito pezzo dopo pezzo aggiungendo più livelli (e temi) ad un grafico base creato con la funzione `ggplot`.
+
+
+========================================================
+
+```{r}
+library(ggplot2)
+library(readr)
+lazio <- read.csv("./dati-istat/tavola_pop_res.csv")
+data <- as.data.frame(lazio)
+
+library(stringr)
+library(dplyr)
+```
+
+========================================================
+```{r}
+names(data)
+data <- data[which(data$Età != 999), ]
+```
+
+GGplot
+========================================================
+
+```{r, fig.align='center'}
+ggplot(data, aes(x = Età, y = TotaleMaschi))
+```
+
+In questo modo otteniamo un grafico vuoto, nonostante vengano specificate le variabili per i due assi non vediamo alcun punto o linea perché questo è il comportamento normale di `ggplot`, lo abbiamo soltanto istruito su quale dataset verrà utilizzato e quali variabili utilizzare per i due assi senza indicazioni specifiche su cosa disegnare (linee, punti, barre,...).
+
+Aesthetics e livelli grafici
+=========================================================
+La funzione `aes()` descrive come devono essere *mappate* le variabili del dataframe rispetto al grafico ed alle proprietà delle geometrie che possono essere aggiunte (punti, linee, barre,..).
+
+Possiamo impostare queste mappature sia in `ggplot()` che nei vari livelli.
+
+Scatterplot
+=========================================================
+
+```{r, fig.align='center'}
+ggplot(data, aes(x = Età, y = TotaleMaschi)) + geom_point()
+```
+
+
+Abbiamo ottenuto uno scatterplot dove ogni punto rappresenta una classe di età. Mancano alcune componenti elementari come il titolo, etichette degli assi,  
+
+
+=========================================================
+
+Analogamente a `geom_point()`, ci sono altri layers di tipo *geom*.
+
+Adesso aggiungiamo un layer `geom_smooth()`. 
+
+```{r, fig.align='center'}
+g <- ggplot(data, aes(x = Età, y = TotaleMaschi)) + geom_point() + 
+  geom_smooth()  # set se=FALSE to turnoff confidence bands
+plot(g)
+```
+
+Limiti per gli assi X ed Y, metodo 1
+==========================================================
+
+Possiamo eliminare i punti che cadono fuori del nostro range di interesse, in questo modo le funzioni di smoothing (o interpolanti) verranno modificate di conseguenza (come se avessimo preso un sottoinsieme dei nostri dati).
+
+Questo metodo può essere applicato usando le funzioni `xlim()` e `ylim()`. Possimo utilizzare come argomento un vettore numerico di due valori (il minimo e massimo) oppure direttamente il minimo ed il massimo.
+
+```{r, eval=FALSE}
+xlim( c(25, 55) )
+
+xlim( 25, 55 )
+```
+
+
+===========================================================
+
+```{r, fig.align='center'}
+g + xlim(c(25, 55)) #+ ylim(c(0, 25000))   
+```
+
+
+===========================================================
+```{r, fig.align='center'}
+g + xlim(20, 40) #+ ylim(0, 28000)   
+```
+
+
+Limiti per gli assi X ed Y, metodo 2
+===========================================================
+
+Possiamo modificare i limiti degli assi in modo da zoomare nella regione di interesse ma senza eliminare i punti utilizzando `coord_cartesian()`. In questo modo la linea di adattamento è la stessa del plot iniziale.
+
+Assegnamo questo plot alla variabile `g1`.
+
+```{r, fig.align='center'}
+g1 <- g + coord_cartesian(xlim = c(25, 55), ylim = c(0, 50000))  
+plot(g1)
+```
+
+Modificare il titolo e le etichette degli assi
+===========================================================
+
+```{r, fig.align='center'}
+g1 + labs(title = "Età Vs frequenza assoluta", subtitle = "Dati per il comune di Roma", y = "Freq", x = "Età", caption = "Demografia Romana")
+```
+
+Modificare il titolo e le etichette degli assi
+===========================================================
+```{r, fig.align='center'}
+g1 + ggtitle("Età Vs frequenza assoluta", subtitle = "Dati per il comune di Roma") + 
+  xlab("Età") + 
+  ylab("Frequenza")
+```
+
+Modificare colore e dimensione
+============================================================
+
+```{r, fig.align='center'}
+data$Totale <- data$TotaleMaschi + data$TotaleFemmine
+
+ggplot(data, aes(x = Età, y = Totale)) +
+  geom_point(col = "steelblue", size = 3) +   
+  geom_smooth(col = "firebrick") +  
+  ggtitle("Età Vs frequenza assoluta", 
+          subtitle = "Dati per il comune di Roma") +
+  ylab("Frequenza") + xlab("Età")
+```
+
+Modificare il colore in base al valore di una colonna
+============================================================
+
+```{r, fig.align='center'}
+gg <- ggplot(data, aes(x = Età, y = TotaleMaschi)) + geom_point(aes(col = MaschiFemmine), size=3) +  
+  geom_smooth(col = "red", size = 2) + 
+  ggtitle("Età Vs frequenza assoluta", 
+          subtitle = "Dati per il comune di Roma") +
+  ylab("Frequenza") + xlab("Età")
+```
+
+Modificare il colore in base al valore di una colonna
+============================================================
+```{r, fig.align='center'}
+plot(gg)
+```
+
+Adesso ogni punto è colorato in base ai maschi divorziati per età `aes(col= Maschi.divorziati)`. Anche la dimensione, la forma e la bordatura possono utilizzate per distinguere i raggrupamenti delle categorie.
+
+Legenda
+============================================================
+
+La legenda viene aggiunta automaticamente ma all'occorrenza può essere rimossa utilizzando `legend.position = None` nella funzione `theme()`.
+
+```{r, fig.align='center'}
+gg + theme(legend.position = "None")  
+```
+
+Legenda
+============================================================
+
+
+```{r, fig.align='center'}
+gg + theme(legend.position = "top")  
+```
+
+
+Scala di colori
+============================================================
+
+```{r, fig.align='center'}
+gg + scale_color_viridis_c()  
+```
+
+Palette di colori
+============================================================
+
+```{r}
+library(RColorBrewer)
+
+terremoti <- read.csv("dati/terremoti.txt", sep = "|") # dati INGV
+df <- as.data.frame(terremoti)
+colnames(df)
+# summary(df)
+
+```
+
+============================================================
+
+```{r, fig.align='center', fig.width=14}
+g <- ggplot(df, aes(x = Depth.Km, y = Magnitude)) +
+  geom_point(aes(col = Author), size = 2)   +  # Set color
+  geom_smooth(col = "red", size = 2, method = lm) +
+  labs(title = "Terremoti - agosto 2019", 
+       subtitle = "Scosse nel raggio di 100Km", 
+       y = "Magnitudo", 
+       x = "Profondità (Km)", 
+       caption = "Scosse") +
+  scale_colour_brewer(palette = "Set3")
+```
+
+Plot
+============================================================
+
+```{r, fig.align='center', fig.width=14}
+g 
+```
+
+
+============================================================
+
+```{r, fig.align='center'}
+g + scale_x_continuous(breaks = seq(0, 50, 10))
+```
+
+============================================================
+
+```{r, fig.align='center'}
+g + theme_bw() + labs(subtitle = "BW Theme")
+```
+
+============================================================
+```{r, fig.align='center'}
+g + theme_classic() + labs(subtitle = "Classic Theme")
+```
+

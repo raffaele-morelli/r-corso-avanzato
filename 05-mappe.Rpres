@@ -1,0 +1,143 @@
+Importazione file shape dal sito ISTAT e primo approccio alle mappe tematiche
+========================================================
+author: Dott.ssa Arianna Orasi - Dott.Raffaele Morelli - Dott. Marco Picone 
+css: custom.css
+date: 
+width: 1200
+height: 800
+font-family: 'Serif'
+
+
+Importazione dati geografici delle unità amministrative
+========================================================
+
+
+Carichiamo le librerie
+
+```{r, eval=TRUE}
+library("ggplot2")
+library("sf")
+library("rnaturalearth")
+library("rnaturalearthdata")
+library("ggplot2")
+library("RPostgreSQL")
+library("ggpubr")
+```
+
+Importazione dati ESRI shapefile (regioni)
+=================================================
+
+```{r, eval=TRUE}
+library("rgdal")
+regioni <- readOGR("dati-istat/Limiti01012019_g/Reg01012019_g/Reg01012019_g_WGS84.shp")
+```
+
+Importazione dati ESRI shapefile (province)
+=================================================
+
+```{r, eval=TRUE}
+province <- readOGR("dati-istat/Limiti01012019_g/ProvCM01012019_g/ProvCM01012019_g_WGS84.shp")
+```
+
+Importazione dati ESRI shapefile (comuni)
+=================================================
+
+```{r, eval=TRUE}
+comuni <- readOGR("dati-istat/Limiti01012019_g/Com01012019_g/Com01012019_g_WGS84.shp")
+```
+
+
+
+Sistema di riferimento e oggetti sf
+=================================================
+```{r}
+st_crs(regioni)
+st_crs(province)
+st_crs(comuni)
+```
+
+Regioni
+==================================================
+```{r}
+regioni <- st_as_sf(regioni, plot = FALSE, fill = TRUE)
+# head e tail mostrano rispettivamente le prime e le ultime  n righe di un oggetto/data frame
+tail(regioni, n = 3)
+```
+
+Province
+==================================================
+```{r}
+province <- st_as_sf(province)
+head(province, n = 3)   
+```
+
+Comuni
+==================================================
+```{r}
+comuni <- st_as_sf(comuni)
+head(comuni, n = 3)   
+```
+
+Tematismo rispetto ad un attributo
+=================================================
+```{r, fig.width=16}
+g <- ggplot(data = regioni) + 
+  geom_sf() +
+  geom_sf(data = province, aes(fill = Shape_Area), color = "white", size = 0.2 ) 
+g
+```
+
+Simboli cartografici
+===================================================
+```{r}
+library("ggspatial")
+g <- g + scale_fill_viridis_c(trans = "sqrt", alpha = .4) +
+    annotation_scale(location = "bl", width_hint = 0.4) +
+    annotation_north_arrow(location = "bl", which_north = "true", 
+        pad_x = unit(0.75, "in"), pad_y = unit(0.5, "in"), style = north_arrow_fancy_orienteering) +
+    xlab("Longitudine") + ylab("Latitudine") +
+    ggtitle("Siti di osservazione") +
+    theme(panel.grid.major = element_line(color = gray(0.5), linetype = "dashed", 
+        size = 0.5), panel.background = element_rect(fill = "aliceblue"))
+```
+
+======================================================
+```{r}
+g
+```
+
+Zoom... un momento
+======================================================
+
+```{r}
+g <- g + coord_sf(xlim = c(12, 14), ylim = c(40, 45), expand = TRUE) 
+g
+```
+
+Riproiezione
+==================================================
+
+```{r}
+regioni <- st_transform(regioni, 4326)
+tail(regioni, n = 3)
+st_crs(regioni)
+```
+
+Riproiezione
+=======================================================
+
+```{r}
+province <- st_transform(province, 4326)
+tail(province, n = 3)
+st_crs(province)
+```
+
+Riproiezione
+=======================================================
+
+```{r}
+comuni <- st_transform(comuni, 4326)
+tail(comuni, n = 3)
+st_crs(comuni)
+```
+

@@ -1,0 +1,287 @@
+Mappa tematica con dati ISTAT
+========================================================
+author: Dott.ssa Arianna Orasi - Dott.Raffaele Morelli - Dott. Marco Picone
+date: 
+width: 1400
+height: 800
+font-family: 'Serif'
+
+Prerequisiti
+======================================================
+```{r}
+library(readr)
+library(ggplot2)
+library(ggspatial)
+library(ggpubr)
+library(sf)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(rgdal)
+library(viridis)
+```
+
+Dati ISTAT e tematismo
+======================================================
+Supponiamo di voler creare delle mappe tematiche che rappresentino la popolazione residente per comune. Sul sito dell'ISTAT possiamo scaricare i dati sulla popolazione a qualsiasi livello territoriale in formato Excel o CSV.
+
+Scarichiamo il file dei comuni dal sito: 
+http://demo.istat.it/pop2019/index3.html
+
+```{r}
+# importiamo il file csv (ISTAT non ce lo dice....)
+library(readr)
+comuni <- read_csv("dati-istat/comuni.csv", skip = 1)
+class(comuni)
+```
+
+trasformiamo l'oggetto in un `dataframe`
+
+```{r}
+df <- as.data.frame(comuni)
+
+```
+
+Diamo uno sguardo
+======================================================
+
+```{r}
+dim(df)
+```
+
+Diamo uno sguardo
+======================================================
+```{r}
+names(df)
+
+```
+
+Colonne di interesse e totale
+======================================================
+
+```{r}
+df <- df[, c(1:2,11,19)]
+head(df)
+```
+
+Colonne di interesse e totale
+======================================================
+```{r}
+df$tot <- df[,3]+df[,4]
+head(df)
+```
+
+Troppi spazi...
+======================================================
+
+```{r}
+names(df)
+
+colnames(df) <- c("PRO_COM", "denominazione", "maschi", "femmine", "tot")
+head(df)
+```
+
+Importiamo il file shape
+======================================================
+
+Scarichiamo le basi territoriali dal sito ISTAT:
+https://www.istat.it/it/archivio/222527  (possiamo prendere la versione meno dettagliata)
+
+
+Utilizzo dei file immagine
+=======================================================
+```{r}
+
+if( file.exists("datigeo.Rdata") ) {
+  print("Carichiamo il file dati")
+  load("datigeo.Rdata")  
+}
+
+# il percorso alla directory con gli shapefile
+shapedir <- "dati-istat/Limiti01012019_g/Com01012019_g/"
+
+if( !exists("comuni_shp") ) {
+  shapefile <- paste0(shapedir, "Com01012019_g_WGS84.shp")
+  comuni_shp <- readOGR(shapefile)
+  comuni_shp <- st_as_sf(comuni_shp) # trasformiamo subito in un oggetto sf
+  st_crs(comuni_shp)
+  save.image(file = "datigeo.Rdata")
+}
+
+# filtriamo e prendiamo i dati della regione Lazio (per ridurre i tempi)
+lazio_shp <- comuni_shp[comuni_shp$COD_REG == '12', ]
+```
+
+Plot iniziale
+======================================================
+Ecco come si presenta la nostra mappa dei comuni senza tematismo ed altri *fronzoli*.
+
+```{r, fig.align='center'}
+ggplot(data = lazio_shp) +  geom_sf(color = "gray50", size = 0.1)
+```
+
+
+Come associare il file shape ed i nostri dati?
+======================================================
+
+```{r}
+names(lazio_shp)
+```
+
+Come associare il file shape ed i nostri dati?
+======================================================
+```{r}
+names(df)
+```
+
+
+Merge
+======================================================
+come possiamo vedere i due dataframe hanno un campo comune quindi possiamo utilizzare la funzione `merge` per produrre un nuovo dataframe che sia (appunto) l'unione per riga del dataframe contenente le informazioni geografice con quello contenente i dati che vogliamo rappresentare. 
+```{r}
+# ?merge
+new_df <- merge(lazio_shp, df, by.x = "PRO_COM", by.y = "PRO_COM" )
+head(new_df, n = 3)
+```
+
+Primo plot
+======================================================
+
+Utilizziamo una scala continua per il dato della popolazione residente totale.
+
+```{r, fig.align='center'}
+ggplot(data = new_df, aes(fill = tot)) + 
+  geom_sf(size= 0.1) + 
+  scale_fill_viridis(option = "magma", direction = -1)
+```
+
+
+Di cosa abbiamo bisogno <=> Cosa non va
+======================================================
+In prima battuta
+
+- il tematismo risulta poco chiaro, i colori troppo simili
+- la scala continua non è efficace, la legenda risulta poco leggibile
+
+
+Scala logaritmica?
+======================================================
+
+```{r, fig.align='center'}
+ggplot(data = new_df, aes(fill = tot)) + 
+  geom_sf(size= 0.1) + 
+  scale_fill_viridis(option = "magma", direction = -1, trans = "log")
+```
+
+Utilizziamo classi di popolazione
+======================================================
+
+```{r}
+no_classes <- 10 # stabiliamo il numero delle classi
+
+quantiles <- quantile(new_df$tot, probs = seq(0, 1, length.out = no_classes + 1))
+quantiles
+
+```
+
+Popoliamo il vettore con le etichette
+=====================================================
+Creiamo un vettore, tramite iterazione, che contenga le etichette (le classi di popolazione) che andremo ad utilizzare per "dividere" il nostro dataframe collocando ogni comune nella classe di popolazione che gli compete.
+
+```{r}
+etichette <- c()  # creiamo un vettore che ospiterà le etichette
+
+for(i in 1:length(quantiles)) {
+  etichette <- c( 
+      etichette, 
+      paste0(
+        round(quantiles[i], 1), " – ", round(quantiles[i + 1], 1)
+        )
+    )
+}
+```
+
+======================================================
+```{r}
+etichette
+
+# rimuoviamo l'ultima classe "2856133 – NA"
+etichette <- etichette[1:length(etichette) - 1]
+
+```
+
+Nuova variabile con la classe di appartenenza
+======================================================
+```{r}
+# pop_quantili
+new_df$pop_quantili <- cut(new_df$tot, 
+                           breaks = quantiles, 
+                           labels = etichette, 
+                           include.lowest = T)
+
+names(new_df)
+```
+
+
+Risultato
+======================================================
+
+```{r, fig.width=14, fig.align = 'center'}
+ggplot(data = new_df, aes(fill = pop_quantili)) + 
+  geom_sf(size= 0.2, color = "white") + 
+  scale_fill_viridis(
+    option = "magma", name = "Popolazione residente", discrete = T, direction = -1,
+    guide = guide_legend(keyheight = unit(6, units = "mm"), reverse = T  )) 
+```
+
+
+Riproziezione?
+==================================================
+
+```{r, fig.width=14, fig.align = 'center'}
+p1 <- st_transform(new_df, 4326)
+
+g <- ggplot(data = p1, aes(fill = pop_quantili)) + geom_sf(size= 0.1, color = "white") + 
+  scale_fill_viridis(
+    option = "cividis", name = "Popolazione residente", 
+    discrete = T, direction = -1,
+    guide = guide_legend(
+          keyheight = unit(6, units = "mm"), 
+          title.position = 'top', reverse = T  )
+    ) +
+  theme(panel.grid.major = element_line(color = gray(0.5), linetype = "dashed", size = 0.5), 
+        panel.background = element_rect(fill = "aliceblue")) 
+```
+
+==================================================
+
+```{r, fig.width=14, fig.align='center'}
+print(g)
+```
+
+=================================================================
+```{r, fig.width=14, fig.align='center'}
+
+g <- ggplot(data = p1, aes(fill = pop_quantili)) + 
+  geom_sf(size= 0.2, color = "white") + 
+  scale_fill_viridis(
+    option = "cividis", name = "Popolazione residente", 
+    discrete = T, direction = -1,
+    guide = guide_legend(
+          keyheight = unit(5, units = "mm"), 
+          title.position = 'top', reverse = T  )
+    ) +
+    annotation_scale(location = "bl", width_hint = 0.4) +
+    annotation_north_arrow(
+      location = "bl", 
+      which_north = "true", 
+      pad_x = unit(0.75, "in"), pad_y = unit(0.5, "in"), style = north_arrow_fancy_orienteering) +
+    xlab("Longitudine") + ylab("Latitudine") +
+    ggtitle("Siti di osservazione")
+```
+
+==================================================
+```{r, fig.width=10, fig.height=10, fig.align='center'}
+print(g)
+```
+
+
